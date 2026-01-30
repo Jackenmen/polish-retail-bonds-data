@@ -1,0 +1,74 @@
+name: Update bonds data
+on:
+  push:
+  workflow_dispatch:
+  schedule:
+    - cron: "7 18 * * *"
+
+jobs:
+  update_bonds_data:
+    name: Update bonds data
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout the data repository
+        uses: actions/checkout@v6
+        with:
+          path: data
+          sparse-checkout: data/*/*/*_metadata.json
+          sparse-checkout-cone-mode: false
+
+      - name: Checkout the parser repository
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ github.repository_owner }}/polish-retail-bonds-parser
+          path: parser
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: parser/.python-version
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Cache bond PDFs
+        uses: actions/cache@v5
+        with:
+          path: pdf-cache
+          key: pdf-cache
+
+      - name: Update bonds data
+        run: uv run --project parser --frozen polish-retail-bonds --bond-pdf-cache pdf-cache --file-tree data/data
+
+      - name: Check git status
+        working-directory: data
+        run: git status
+
+      - name: Configure Git user
+        working-directory: data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Stage changes
+        id: stage-changes
+        working-directory: data
+        run: |
+          git add --sparse data
+          if git diff --staged --quiet; then
+            echo HAS_CHANGES=0 >> "$GITHUB_OUTPUT"
+          else
+            echo HAS_CHANGES=1 >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push changes
+        working-directory: data
+        if: steps.stage-changes.outputs.HAS_CHANGES == 1
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add --sparse data
+          git commit -m "Update with data from dataset fetched on $(date +'%Y-%m-%d')"
+          git push
