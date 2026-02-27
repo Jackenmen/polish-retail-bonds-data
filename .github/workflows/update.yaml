@@ -16,7 +16,9 @@ jobs:
         uses: actions/checkout@v6
         with:
           path: data
-          sparse-checkout: data/*/*/*_metadata.json
+          sparse-checkout: |
+            data/*/*/*_metadata.json
+            html_table_generator.py
           sparse-checkout-cone-mode: false
 
       - name: Checkout the parser repository
@@ -41,6 +43,10 @@ jobs:
 
       - name: Update bonds data
         run: uv run --project parser --frozen polish-retail-bonds --bond-pdf-cache pdf-cache --file-tree data/data
+
+      - name: Update HTML data tables
+        working-directory: data
+        run: python html_table_generator.py
 
       - name: Check git status
         working-directory: data
