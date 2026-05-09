@@ -114,7 +114,7 @@ def generate_table[T](
                 if collected_value is not None:
                     cell_value = value_renderer(collected_value)
                 fp.write(f"<td>{cell_value}</td>")
-            fp.write("</tr>")
+            fp.write("</tr>\n")
 
     fp.write("</tbody>\n")
     fp.write(HTML_POST)
