@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Checkout the data repository
         uses: actions/checkout@v6
@@ -71,10 +72,54 @@ jobs:
 
       - name: Commit and push changes
         working-directory: data
+        env:
+          BRANCH_NAME: automated/${{ github.run_id }}/update-bonds-data
         if: steps.stage-changes.outputs.HAS_CHANGES == 1
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH_NAME"
           git add --sparse data
           git commit -m "Update with data from dataset fetched on $(date +'%Y-%m-%d')"
-          git push
+          git push -u origin "$BRANCH_NAME"
+
+      - name: Generate a PR
+        working-directory: data
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: steps.stage-changes.outputs.HAS_CHANGES == 1
+        run: |
+          PR_BODY=$'This is an automated PR.\nShort stat:\n```\n'
+          PR_BODY+=$(git show --shortstat)
+          PR_BODY+=$'\n```\n'
+
+          table=$(git show --pretty=format: -U1 data/table_early_redemption_costs.html | tail -n +7 | head -2 | cut -c 2-)
+          if [[ -n "$table" ]]; then
+            PR_BODY+=$'Early redemption costs:\n<table>\n'
+            PR_BODY+="$table"
+            PR_BODY+=$'\n</table>\n'
+          fi
+          table=$(git show --pretty=format: -U1 data/table_initial_rates.html | tail -n +7 | head -2 | cut -c 2-)
+          if [[ -n "$table" ]]; then
+            PR_BODY+=$'Initial rates:\n<table>\n'
+            PR_BODY+="$table"
+            PR_BODY+=$'\n</table>\n'
+          fi
+
+          PR_URL=$(
+            gh pr create \
+              --fill \
+              --base "$GITHUB_REF_NAME" \
+              --body "$PR_BODY" \
+              --label 'automated pr'
+          )
+          echo "-   Created a PR: $PR_URL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Merge the PR
+        working-directory: data
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: steps.stage-changes.outputs.HAS_CHANGES == 1
+        run: |
+          gh pr merge --squash --delete-branch
+          echo "-   Squash merged the PR" >> "$GITHUB_STEP_SUMMARY"
