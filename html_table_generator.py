@@ -1,3 +1,4 @@
+import itertools
 import json
 from collections.abc import Callable
 from decimal import Decimal
@@ -70,6 +71,21 @@ HTML_POST = """\
 </html>
 """
 HEADERS = ("ROR", "DOR", "TOS", "COI", "EDO", "ROS", "ROD")
+HTML_NEUTRAL_TREND = (
+    '<span style="visibility:hidden">\N{BLACK UP-POINTING TRIANGLE}</span>'
+)
+HTML_UPWARD_TREND_POSITIVE= (
+    '<span style="color:#0bc00b">\N{BLACK UP-POINTING TRIANGLE}</span>'
+)
+HTML_UPWARD_TREND_NEGATIVE= (
+    '<span style="color:#ff0000">\N{BLACK UP-POINTING TRIANGLE}</span>'
+)
+HTML_DOWNWARD_TREND_POSITIVE = (
+    '<span style="color:#0bc00b">\N{BLACK DOWN-POINTING TRIANGLE}</span>'
+)
+HTML_DOWNWARD_TREND_NEGATIVE = (
+    '<span style="color:#ff0000">\N{BLACK DOWN-POINTING TRIANGLE}</span>'
+)
 
 
 def generate_table[T](
@@ -96,6 +112,7 @@ def generate_table[T](
     fp.write("</tr>\n")
     fp.write("</thead>\n")
     fp.write("<tbody>\n")
+    month_values = []
     for year_dir in sorted(Path("data").iterdir(), reverse=True):
         if not year_dir.is_dir():
             continue
@@ -105,16 +122,23 @@ def generate_table[T](
                 with metadata_file.open(encoding="utf-8") as metadata_fp:
                     data = json.load(metadata_fp)
                     values[data["type_name"]] = value_collector(data)
+            month_values.append((f"{year_dir.name}-{month_dir.name}", values))
 
+    for (period, values), (_, previous_values) in itertools.chain(
+        itertools.pairwise(month_values),
+        ((month_values[-1], ("", {})),),
+    ):
             fp.write("<tr>")
-            fp.write(f"<td>{year_dir.name}-{month_dir.name}</td>")
+            fp.write(f"<td>{period}</td>")
             for type_name in HEADERS:
+                previous_value = previous_values.get(type_name)
                 collected_value = values.get(type_name)
                 cell_value = ""
                 if collected_value is not None:
-                    cell_value = value_renderer(collected_value)
+                    cell_value = value_renderer(collected_value, previous_value=previous_value)
                 fp.write(f"<td>{cell_value}</td>")
             fp.write("</tr>\n")
+            previous_values = values
 
     fp.write("</tbody>\n")
     fp.write(HTML_POST)
@@ -124,16 +148,28 @@ def _collect_rate(data: dict[str, Any]) -> Decimal:
     return Decimal(data["interest_rate"][0]["rate"])
 
 
-def _render_rate(value: Decimal) -> str:
-    return f"{value * 100:.2f}%".replace(".", ",")
+def _render_rate(value: Decimal, *, previous_value: Decimal | None = None) -> str:
+    if previous_value is None or previous_value == value:
+        suffix = HTML_NEUTRAL_TREND
+    elif previous_value < value:
+        suffix = HTML_UPWARD_TREND_POSITIVE
+    else:
+        suffix = HTML_DOWNWARD_TREND_NEGATIVE
+    return f"{value * 100:.2f}%".replace(".", ",") + suffix
 
 
 def _collect_early_redemption_cost(data: dict[str, Any]) -> Decimal:
     return Decimal(data["early_redemption_cost"])
 
 
-def _render_early_redemption_cost(value: Decimal) -> str:
-    return f"{value:.2f} zł".replace(".", ",")
+def _render_early_redemption_cost(value: Decimal, *, previous_value: Decimal | None = None) -> str:
+    if previous_value is None or previous_value == value:
+        suffix = HTML_NEUTRAL_TREND
+    elif previous_value < value:
+        suffix = HTML_UPWARD_TREND_NEGATIVE
+    else:
+        suffix = HTML_DOWNWARD_TREND_POSITIVE
+    return f"{value:.2f} zł".replace(".", ",") + suffix
 
 
 if __name__ == "__main__":
