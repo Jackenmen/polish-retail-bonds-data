@@ -71,9 +71,7 @@ HTML_POST = """\
 </html>
 """
 HEADERS = ("ROR", "DOR", "TOS", "COI", "EDO", "ROS", "ROD")
-HTML_NEUTRAL_TREND = (
-    '<span style="visibility:hidden">\N{BLACK UP-POINTING TRIANGLE}</span>'
-)
+HTML_NEUTRAL_TREND = '<span style="visibility:hidden">&emsp;</span>'
 HTML_UPWARD_TREND_POSITIVE= (
     '<span style="color:#0bc00b">\N{BLACK UP-POINTING TRIANGLE}</span>'
 )
