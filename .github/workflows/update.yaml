@@ -13,6 +13,17 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      - name: Configure VPN
+        env:
+          WIREGUARD_VPN_CONFIG: ${{ secrets.WIREGUARD_VPN_CONFIG }}
+        if: env.WIREGUARD_VPN_CONFIG != ''
+        run: |
+          sudo apt-get install wireguard
+          sudo touch /etc/wireguard/vpn.conf
+          sudo chmod 600 /etc/wireguard/vpn.conf
+          echo "$WIREGUARD_VPN_CONFIG" | sudo tee /etc/wireguard/vpn.conf > /dev/null
+          sudo wg-quick up vpn
+
       - name: Checkout the data repository
         uses: actions/checkout@v6
         with:
